@@ -1,0 +1,12 @@
+[
+  {
+    "name": "ptschool",
+    "url": "https://pt.btschool.club",
+    "encrypted_cookie_url": "https://raw.githubusercontent.com/zhaoyifei100-crypto/mycheckbox/main/cookies/ptschool.cookie.enc"
+  },
+  {
+    "name": "keepfrds",
+    "url": "https://pt.keepfrds.com",
+    "encrypted_cookie_url": "https://raw.githubusercontent.com/zhaoyifei100-crypto/mycheckbox/main/cookies/keepfrds.cookie.enc"
+  }
+]
