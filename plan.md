@@ -57,27 +57,18 @@ make logging
 ## 每周邮件周报
 
 每周日按 `Asia/Shanghai` 时区运行时，程序查询本周一 00:00 到当前时间的专用
-Cloud Logging view，并将日志直接写入邮件正文，通过 QQ SMTP 发到：
-
-```text
-zhaoyifei100@gmail.com
-```
+Cloud Logging view，并将日志直接写入邮件正文，通过 QQ SMTP 发到加密配置中的 `to` 地址。
 
 本地凭据文件为：
 
 ```text
-/Users/zhao/Projects/mycheckbox/.secrets/qq_mail.txt
+/Users/zhao/Projects/mycheckbox/.secrets/qq_mail.json
 ```
 
-文件使用两行 `mail=...`、`pwd=...` 格式，权限已设置为 `600`。已经创建独立 Secret：
-
-```text
-mycheckbox-qq-mail
-```
-
-Cloud Run 服务账号只获得该 Secret 的读取权限，以及
-`mycheckbox-logs/_AllLogs` 的 `roles/logging.viewAccessor` 权限。授权码不会写入代码、
-环境变量、Docker 镜像、日志或邮件附件。
+文件使用 JSON 格式，包含 `mail`、`key` 和 `to` 字段，权限为 `600`。加密后的配置文件
+会上传到 GitHub Raw；本地旧的两行格式仍兼容。Cloud Run 使用项目独立 Key 解密，
+并只获得 `mycheckbox-logs/_AllLogs` 的 `roles/logging.viewAccessor` 权限。邮箱、收件地址
+和授权码不会写入代码、环境变量、Docker 镜像或日志。
 
 周报发送失败会令本次 Job 返回非零，便于发现问题；错误日志只写“邮件发送失败”，不
 包含 SMTP 用户名、授权码或异常详情。日志正文也不包含 Cookie 或授权码。非周日运行不会发邮件。开发本地运行时可以设置
@@ -214,7 +205,7 @@ make scheduler
 - [x] 独立 Secret `mycheckbox-cookie-key` 已创建，version 1 已写入。
 - [x] 两个站点已生成 AES-GCM 加密 Cookie 文件。
 - [x] 已创建 `mycheckbox-logs` 专用 Cloud Logging bucket 和日志 sink。
-- [x] 已创建 `mycheckbox-qq-mail` Secret，并授予 Cloud Run 最小读取权限。
+- [x] 邮箱配置已改为 JSON，发件/收件地址和授权码统一加密后通过 GitHub Raw 读取。
 - [x] 已加入周日发送本周日志正文的 QQ SMTP 模块。
 - [ ] 将代码和 `cookies/*.cookie.enc` 推送到 GitHub。
 - [ ] 构建并部署独立 Cloud Run Job。

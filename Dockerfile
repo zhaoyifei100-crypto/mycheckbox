@@ -12,8 +12,7 @@ COPY sites.json .
 ENV PYTHONUNBUFFERED=1 \
     GCP_PROJECT_ID=project-048627af-e7d4-4972-9d3 \
     MYCHECKBOX_COOKIE_KEY_SECRET_ID=mycheckbox-cookie-key \
-    MYCHECKBOX_QQ_MAIL_SECRET_ID=mycheckbox-qq-mail \
-    MYCHECKBOX_REPORT_RECIPIENT=zhaoyifei100@gmail.com \
+    MYCHECKBOX_QQ_MAIL_ENCRYPTED_URL=https://raw.githubusercontent.com/zhaoyifei100-crypto/mycheckbox/refs/heads/main/secrets/qq_mail.enc \
     MYCHECKBOX_REPORT_TIME_ZONE=Asia/Shanghai \
     MYCHECKBOX_LOG_BUCKET=mycheckbox-logs \
     MYCHECKBOX_LOG_LOCATION=global \

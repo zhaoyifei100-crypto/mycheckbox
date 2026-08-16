@@ -12,14 +12,55 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-DEFAULT_RECIPIENT = "zhaoyifei100@gmail.com"
+import requests
+
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
 DEFAULT_TIME_ZONE = "Asia/Shanghai"
 DEFAULT_SMTP_HOST = "smtp.qq.com"
 DEFAULT_SMTP_PORT = 465
+DEFAULT_MAIL_URL = (
+    "https://raw.githubusercontent.com/zhaoyifei100-crypto/mycheckbox/"
+    "refs/heads/main/secrets/qq_mail.enc"
+)
+
+
+def _decode_root_key(value: str) -> bytes:
+    import base64
+
+    try:
+        key = base64.b64decode(value.strip(), validate=True)
+    except Exception as exc:
+        raise RuntimeError("项目 Cookie Key 不是有效的 base64") from exc
+    if len(key) != 32:
+        raise RuntimeError("项目 Cookie Key 必须解码为 32 字节")
+    return key
+
+
+def _decrypt_mail_payload(payload: dict[str, Any], root_key: bytes) -> str:
+    import base64
+
+    if payload.get("format") != "mycheckbox-mail-v1":
+        raise RuntimeError("邮件配置密文格式不匹配")
+    try:
+        salt = base64.b64decode(payload["salt"], validate=True)
+        nonce = base64.b64decode(payload["nonce"], validate=True)
+        ciphertext = base64.b64decode(payload["ciphertext"], validate=True)
+        key = HKDF(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            info=b"mycheckbox-mail-v1",
+        ).derive(root_key)
+        return AESGCM(key).decrypt(nonce, ciphertext, b"mycheckbox-mail-v1").decode("utf-8")
+    except Exception as exc:
+        raise RuntimeError("邮件配置解密失败") from exc
 
 
 def _read_mail_secret() -> str:
-    """Read the mail credential bundle from an explicit local file or Secret Manager."""
+    """Read mail credentials from local test storage or encrypted GitHub Raw."""
 
     local_file = os.environ.get("MYCHECKBOX_QQ_MAIL_FILE")
     if local_file:
@@ -30,11 +71,48 @@ def _read_mail_secret() -> str:
 
     from .checkin import read_secret
 
-    return read_secret(os.environ.get("MYCHECKBOX_QQ_MAIL_SECRET_ID", "mycheckbox-qq-mail"))
+    root_key = _decode_root_key(
+        read_secret(os.environ.get("MYCHECKBOX_COOKIE_KEY_SECRET_ID", "mycheckbox-cookie-key"))
+    )
+    encrypted_url = os.environ.get("MYCHECKBOX_QQ_MAIL_ENCRYPTED_URL", DEFAULT_MAIL_URL)
+    if not encrypted_url.startswith("https://raw.githubusercontent.com/"):
+        raise RuntimeError("邮件配置 URL 必须是 GitHub Raw HTTPS 地址")
+    try:
+        response = requests.get(encrypted_url, timeout=30)
+        response.raise_for_status()
+        payload = response.json()
+    except requests.RequestException as exc:
+        raise RuntimeError("从 GitHub 读取加密邮件配置失败") from exc
+    except ValueError as exc:
+        raise RuntimeError("GitHub 邮件配置不是有效 JSON") from exc
+    return _decrypt_mail_payload(payload, root_key)
 
 
-def _parse_mail_secret(value: str) -> tuple[str, str]:
+def _parse_mail_secret(value: str) -> tuple[str, str, str | None]:
     """Parse a two-line email/auth-code file without exposing either value."""
+
+    try:
+        parsed = json.loads(value)
+    except ValueError:
+        parsed = None
+    if isinstance(parsed, dict):
+        sender = str(parsed.get("mail") or parsed.get("email") or parsed.get("sender") or "").strip()
+        auth_code = str(
+            parsed.get("key")
+            or parsed.get("auth_code")
+            or parsed.get("authorization_code")
+            or parsed.get("password")
+            or ""
+        ).strip()
+        recipient_value = parsed.get("to") or parsed.get("recipient") or parsed.get("target")
+        recipient = str(recipient_value).strip() if recipient_value else None
+        if not sender or not re.fullmatch(r"[^\s@]+@[^\s@]+", sender):
+            raise RuntimeError("QQ 邮件 JSON 缺少有效发件邮箱")
+        if not auth_code:
+            raise RuntimeError("QQ 邮件 JSON 缺少授权码")
+        if recipient and not re.fullmatch(r"[^\s@]+@[^\s@]+", recipient):
+            raise RuntimeError("QQ 邮件 JSON 中的收件邮箱无效")
+        return sender, auth_code, recipient
 
     lines = [
         line.strip()
@@ -43,6 +121,7 @@ def _parse_mail_secret(value: str) -> tuple[str, str]:
     ]
     sender: str | None = None
     auth_code: str | None = None
+    recipient: str | None = None
 
     for line in lines:
         key, separator, candidate = line.partition("=")
@@ -52,6 +131,9 @@ def _parse_mail_secret(value: str) -> tuple[str, str]:
             continue
         if key_name in {"auth_code", "authorization_code", "authcode", "password", "pwd", "key", "code"} and separator:
             auth_code = candidate.strip()
+            continue
+        if key_name in {"to", "recipient", "target"} and separator:
+            recipient = candidate.strip()
             continue
 
         if sender is None and "@" in line:
@@ -64,7 +146,9 @@ def _parse_mail_secret(value: str) -> tuple[str, str]:
         raise RuntimeError("QQ 邮件授权文件缺少有效发件邮箱")
     if not auth_code:
         raise RuntimeError("QQ 邮件授权文件缺少授权码")
-    return sender, auth_code
+    if recipient and not re.fullmatch(r"[^\s@]+@[^\s@]+", recipient):
+        raise RuntimeError("QQ 邮件授权文件中的收件邮箱无效")
+    return sender, auth_code, recipient
 
 
 def _current_week_to_date(now: datetime) -> tuple[datetime, datetime] | None:
@@ -163,8 +247,8 @@ def maybe_send_weekly_report() -> str | None:
 
     start, end = interval
     log_text = _fetch_log_file(start, end, report_zone)
-    sender, auth_code = _parse_mail_secret(_read_mail_secret())
-    recipient = os.environ.get("MYCHECKBOX_REPORT_RECIPIENT", DEFAULT_RECIPIENT)
+    sender, auth_code, configured_recipient = _parse_mail_secret(_read_mail_secret())
+    recipient = configured_recipient or sender
     subject = (
         f"MyCheckBox 本周签到日志 "
         f"{start.strftime('%Y-%m-%d')} 至 {end.strftime('%Y-%m-%d')}"

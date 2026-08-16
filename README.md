@@ -40,7 +40,6 @@ make logs
 Cloud Scheduler `mycheckbox` 已配置为每天北京时间 19:00 执行 Cloud Run Job；周日运行时
 会额外发送本周日志邮件。
 
-每周日 Job 还会从专用 Cloud Logging bucket 读取本周一至今天的日志，直接写入邮件正文
-发送到 `zhaoyifei100@gmail.com`，不发送附件。QQ 邮件凭据保存在 Secret Manager 的
-`mycheckbox-qq-mail` 中；本地测试使用 `.secrets/qq_mail.txt`，该文件不会进入 Git 或
-Docker 镜像。
+每周日 Job 还会从专用 Cloud Logging bucket 读取本周一至今天的日志，直接写入邮件正文，
+不发送附件。发件邮箱、收件邮箱和 QQ 授权码保存在本地 JSON 配置中，加密后通过 GitHub
+Raw 读取；明文 JSON 不会进入 Git 或 Docker 镜像。

@@ -6,7 +6,7 @@ JOB_NAME ?= mycheckbox
 REPO_NAME ?= stock-study-repo
 IMAGE_TAG ?= latest
 COOKIE_KEY_SECRET_ID ?= mycheckbox-cookie-key
-QQ_MAIL_SECRET_ID ?= mycheckbox-qq-mail
+QQ_MAIL_ENCRYPTED_URL ?= https://raw.githubusercontent.com/zhaoyifei100-crypto/mycheckbox/refs/heads/main/secrets/qq_mail.enc
 SERVICE_ACCOUNT ?= mycheckbox-sa@$(PROJECT_ID).iam.gserviceaccount.com
 PTSCHOOL_UA ?=
 SITES_FILE ?= sites.json
@@ -52,7 +52,7 @@ deploy: check-config
 		--max-retries 0 \
 		--task-timeout 120s \
 		--tasks 1 \
-		--set-env-vars GCP_PROJECT_ID=$(PROJECT_ID),MYCHECKBOX_SITES_FILE=$(SITES_FILE),MYCHECKBOX_COOKIE_KEY_SECRET_ID=$(COOKIE_KEY_SECRET_ID),MYCHECKBOX_QQ_MAIL_SECRET_ID=$(QQ_MAIL_SECRET_ID),MYCHECKBOX_REPORT_RECIPIENT=zhaoyifei100@gmail.com,MYCHECKBOX_REPORT_TIME_ZONE=$(TIME_ZONE),MYCHECKBOX_LOG_BUCKET=$(LOG_BUCKET),MYCHECKBOX_LOG_LOCATION=$(LOG_LOCATION),MYCHECKBOX_LOG_VIEW=_AllLogs,MYCHECKBOX_JOB_NAME=$(JOB_NAME) \
+		--set-env-vars GCP_PROJECT_ID=$(PROJECT_ID),MYCHECKBOX_SITES_FILE=$(SITES_FILE),MYCHECKBOX_COOKIE_KEY_SECRET_ID=$(COOKIE_KEY_SECRET_ID),MYCHECKBOX_QQ_MAIL_ENCRYPTED_URL=$(QQ_MAIL_ENCRYPTED_URL),MYCHECKBOX_REPORT_TIME_ZONE=$(TIME_ZONE),MYCHECKBOX_LOG_BUCKET=$(LOG_BUCKET),MYCHECKBOX_LOG_LOCATION=$(LOG_LOCATION),MYCHECKBOX_LOG_VIEW=_AllLogs,MYCHECKBOX_JOB_NAME=$(JOB_NAME) \
 		$(if $(PTSCHOOL_UA),--set-env-vars PTSCHOOL_UA=$(PTSCHOOL_UA),) \
 		|| gcloud run jobs update $(JOB_NAME) \
 		--project $(PROJECT_ID) \
@@ -63,7 +63,7 @@ deploy: check-config
 		--cpu 1 \
 		--max-retries 0 \
 		--task-timeout 120s \
-		--set-env-vars GCP_PROJECT_ID=$(PROJECT_ID),MYCHECKBOX_SITES_FILE=$(SITES_FILE),MYCHECKBOX_COOKIE_KEY_SECRET_ID=$(COOKIE_KEY_SECRET_ID),MYCHECKBOX_QQ_MAIL_SECRET_ID=$(QQ_MAIL_SECRET_ID),MYCHECKBOX_REPORT_RECIPIENT=zhaoyifei100@gmail.com,MYCHECKBOX_REPORT_TIME_ZONE=$(TIME_ZONE),MYCHECKBOX_LOG_BUCKET=$(LOG_BUCKET),MYCHECKBOX_LOG_LOCATION=$(LOG_LOCATION),MYCHECKBOX_LOG_VIEW=_AllLogs,MYCHECKBOX_JOB_NAME=$(JOB_NAME)
+		--set-env-vars GCP_PROJECT_ID=$(PROJECT_ID),MYCHECKBOX_SITES_FILE=$(SITES_FILE),MYCHECKBOX_COOKIE_KEY_SECRET_ID=$(COOKIE_KEY_SECRET_ID),MYCHECKBOX_QQ_MAIL_ENCRYPTED_URL=$(QQ_MAIL_ENCRYPTED_URL),MYCHECKBOX_REPORT_TIME_ZONE=$(TIME_ZONE),MYCHECKBOX_LOG_BUCKET=$(LOG_BUCKET),MYCHECKBOX_LOG_LOCATION=$(LOG_LOCATION),MYCHECKBOX_LOG_VIEW=_AllLogs,MYCHECKBOX_JOB_NAME=$(JOB_NAME)
 
 run:
 	gcloud run jobs execute $(JOB_NAME) --project $(PROJECT_ID) --region $(REGION) --wait
@@ -99,10 +99,6 @@ setup-iam:
 		--role roles/secretmanager.secretAccessor
 
 mail-secret-iam: setup-iam
-	gcloud secrets add-iam-policy-binding $(QQ_MAIL_SECRET_ID) \
-		--project $(PROJECT_ID) \
-		--member serviceAccount:$(SERVICE_ACCOUNT) \
-		--role roles/secretmanager.secretAccessor
 	gcloud logging views add-iam-policy-binding $(LOG_VIEW) \
 		--project $(PROJECT_ID) \
 		--bucket $(LOG_BUCKET) \
