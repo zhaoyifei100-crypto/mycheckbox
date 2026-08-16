@@ -27,3 +27,20 @@ python -m src.checkin
 
 详细设计、密钥轮换和 Cloud Run 部署步骤见 [`plan.md`](/Users/zhao/Projects/mycheckbox/plan.md)。
 Telegram 消息发送暂未实现。
+
+Cloud Run 日志会自动进入 Cloud Logging；项目另外配置了 `mycheckbox-logs` 专用 bucket，
+保留 30 天，只收集 `mycheckbox` Job 的日志。查询日志：
+
+```bash
+make logs
+```
+
+输出包含北京时间、Cloud Run execution ID 和日志内容，并按最新执行倒序排列。
+
+Cloud Scheduler `mycheckbox` 已配置为每天北京时间 19:00 执行 Cloud Run Job；周日运行时
+会额外发送本周日志邮件。
+
+每周日 Job 还会从专用 Cloud Logging bucket 读取本周一至今天的日志，直接写入邮件正文
+发送到 `zhaoyifei100@gmail.com`，不发送附件。QQ 邮件凭据保存在 Secret Manager 的
+`mycheckbox-qq-mail` 中；本地测试使用 `.secrets/qq_mail.txt`，该文件不会进入 Git 或
+Docker 镜像。

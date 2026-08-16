@@ -22,6 +22,67 @@ Cloud Scheduler → Cloud Run Job → Python requests → 多个 PT 网站
 和独立 Secret，不复用股票任务的 Cookie，也不复用 Telegram Token。Telegram 消息发送
 暂不实现。
 
+## 日志保存
+
+Cloud Run 会自动把容器的 stdout/stderr 写入 Cloud Logging。MyCheckBox 另外配置了专用
+日志存储：
+
+```text
+Log bucket: mycheckbox-logs
+Location: global
+Retention: 30 days
+Sink: mycheckbox-to-bucket
+Filter: resource.type="cloud_run_job" AND resource.labels.job_name="mycheckbox"
+```
+
+这样 MyCheckBox 日志可以和现有股票任务分开查询。程序只输出站点名、结果和账户统计，
+不会输出 Cookie、请求头或完整页面。查询专用日志：
+
+```bash
+make logs
+```
+
+该命令只查询容器 stdout，按北京时间显示时间戳，附带 Cloud Run execution ID，并按最新
+日志在前排序，避免多次执行后无法区分日志来源。
+
+如果需要在其他项目重新配置日志存储，可以运行：
+
+```bash
+make logging
+```
+
+日志 sink 只接收新产生的日志，创建 sink 之前的历史日志不会回流；Cloud Logging 路由
+也可能有短暂延迟。
+
+## 每周邮件周报
+
+每周日按 `Asia/Shanghai` 时区运行时，程序查询本周一 00:00 到当前时间的专用
+Cloud Logging view，并将日志直接写入邮件正文，通过 QQ SMTP 发到：
+
+```text
+zhaoyifei100@gmail.com
+```
+
+本地凭据文件为：
+
+```text
+/Users/zhao/Projects/mycheckbox/.secrets/qq_mail.txt
+```
+
+文件使用两行 `mail=...`、`pwd=...` 格式，权限已设置为 `600`。已经创建独立 Secret：
+
+```text
+mycheckbox-qq-mail
+```
+
+Cloud Run 服务账号只获得该 Secret 的读取权限，以及
+`mycheckbox-logs/_AllLogs` 的 `roles/logging.viewAccessor` 权限。授权码不会写入代码、
+环境变量、Docker 镜像、日志或邮件附件。
+
+周报发送失败会令本次 Job 返回非零，便于发现问题；错误日志只写“邮件发送失败”，不
+包含 SMTP 用户名、授权码或异常详情。日志正文也不包含 Cookie 或授权码。非周日运行不会发邮件。开发本地运行时可以设置
+`MYCHECKBOX_REPORT_ENABLED=0` 禁用周报。
+
 ## 站点目录
 
 站点由项目根目录的 `sites.json` 统一管理：
@@ -152,7 +213,11 @@ make scheduler
 - [x] PTSchool 和 KeepFrDS 的 Cookie 已成功访问站点并解析账户摘要。
 - [x] 独立 Secret `mycheckbox-cookie-key` 已创建，version 1 已写入。
 - [x] 两个站点已生成 AES-GCM 加密 Cookie 文件。
+- [x] 已创建 `mycheckbox-logs` 专用 Cloud Logging bucket 和日志 sink。
+- [x] 已创建 `mycheckbox-qq-mail` Secret，并授予 Cloud Run 最小读取权限。
+- [x] 已加入周日发送本周日志正文的 QQ SMTP 模块。
 - [ ] 将代码和 `cookies/*.cookie.enc` 推送到 GitHub。
 - [ ] 构建并部署独立 Cloud Run Job。
 - [ ] 手动执行成功，确认两个站点均返回正常结果。
-- [ ] Scheduler 手动触发成功后观察一周访问记录。
+- [x] 已创建 Cloud Scheduler：每天 19:00，时区 `Asia/Shanghai`。
+- [ ] Scheduler 自动运行后观察一周访问记录和周日邮件。

@@ -18,6 +18,8 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
+from .report_email import maybe_send_weekly_report
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -284,6 +286,13 @@ def main() -> int:
             except Exception as exc:
                 failed = True
                 print(f"签到失败：{exc}", file=sys.stderr)
+        try:
+            report_result = maybe_send_weekly_report()
+            if report_result:
+                print(report_result)
+        except Exception as exc:
+            failed = True
+            print(f"周报发送失败：{exc}", file=sys.stderr)
         return 1 if failed else 0
     except Exception as exc:
         print(f"配置失败：{exc}", file=sys.stderr)
